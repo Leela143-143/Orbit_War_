@@ -347,7 +347,7 @@ def aim_and_need(src, target, arrivals, player, remaining_steps, planets, traj):
             
     if best is None: return None
     
-    send = max(10, int(best * 1.15))
+    send = max(10, int(best * 1.05))
     angle, turns = get_guaranteed_intercept(src, target, send, traj)
     if angle is None: return None
     
@@ -357,7 +357,12 @@ def aim_and_need(src, target, arrivals, player, remaining_steps, planets, traj):
 # ==========================================
 # MAIN AGENT
 # ==========================================
+
+GLOBAL_PREV_MARGIN = {}
+
 def agent(obs):
+    global GLOBAL_PREV_MARGIN
+
     get = obs.get if isinstance(obs, dict) else lambda k, d=None: getattr(obs, k, d)
     player        = get("player", 0)
     step          = get("step", 0) or 0
@@ -402,6 +407,26 @@ def agent(obs):
         if frontline_status[p.id]:
             res = max(res, int(p.ships * 0.15))
         planet_available[p.id] = max(0, p.ships - res)
+
+    # --- PHASE 0 ---
+    for p in planets:
+        if p.owner == player:
+            in_f = 0
+            in_e = 0
+            for t in range(1, 6):
+                arrs = arrivals.get(p.id, {}).get(t, {})
+                for o, s in arrs.items():
+                    if o == player: in_f += s
+                    else: in_e += s
+            M_i = p.ships + p.production * 5 + in_f - in_e
+            prev = GLOBAL_PREV_MARGIN.get(p.id, M_i)
+            dM = M_i - prev
+            GLOBAL_PREV_MARGIN[p.id] = M_i
+            
+            if dM < -2:
+                if p.id in planet_available:
+                    planet_available[p.id] = max(0, planet_available[p.id] - int(abs(dM)*2))
+
 
     # ====================================================
     # COMMAND LOOP
@@ -452,8 +477,13 @@ def agent(obs):
             # Optimal balance of local expansion
             base_score = tgt.production / (dist_val ** 1.1)
             # The Throat-Slit Multiplier: Massively reward stealing enemy bases
-            if tgt.owner != player and tgt.owner != -1: 
-                base_score *= 2.0
+            if tgt.owner != player: 
+                if tgt.owner != -1:
+                    base_score *= 10.0
+                elif tgt.ships == 0:
+                    base_score *= 10.0
+                else:
+                    base_score *= 2.0
             candidates.append((base_score, tgt))
             
         candidates.sort(key=lambda x: -x[0])
@@ -496,7 +526,7 @@ def agent(obs):
                                 enemy_armies[p.owner] += int(proj_s * 0.75)
                                 break
                                 
-                max_e = max(enemy_armies.values()) if enemy_armies else 0
+                max_e = sum(enemy_armies.values()) if enemy_armies else 0
                 
                 # OVERPOWER THE TRAP
                 safe_send = send + max_e
