@@ -1,5 +1,4 @@
 from kaggle_environments import make
-from htmrl_agent import agent_fn
 
 def play_one_game():
     print("Initializing environment...")
