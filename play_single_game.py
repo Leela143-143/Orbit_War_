@@ -6,7 +6,7 @@ def play_one_game():
     env = make("orbit_wars", debug=True)
     
     print("Running a single game...")
-    env.run(["improvement.py", "main.py"])
+    env.run(["new.py", "main.py"])
     
     print("\nGame Over!")
     
